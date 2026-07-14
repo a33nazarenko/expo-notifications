@@ -38,13 +38,119 @@ src/
 
 Push notifications require a **development build** or **production build**. They do not work in Expo Go.
 
-Supported environments:
+**Accounts and tools:**
+
+- An [Expo account](https://expo.dev/signup) and [EAS CLI](https://docs.expo.dev/build/setup/) (`npm install -g eas-cli && eas login`)
+- A [Firebase project](https://console.firebase.google.com/) for Android FCM
+- A **paid [Apple Developer account](https://developer.apple.com/programs/)** for iOS push notifications and device builds
+
+**Supported test environments:**
 
 - Physical iOS and Android devices
 - Android emulator with Google Play services
 - iOS Simulator (Xcode 14+, macOS 13+, iOS 16+)
 
-For Android push delivery, add a `google-services.json` file from Firebase to the project root (referenced in `app.json`). This file is gitignored and must be added locally.
+## Configure push credentials
+
+Push notifications need platform credentials before they can be delivered. This project uses EAS to manage most of that setup.
+
+### Android — get `google-services.json` from Firebase
+
+The Android app needs `google-services.json` so it can register with Firebase Cloud Messaging (FCM). This project already points to it in `app.json`:
+
+```json
+"android": {
+  "package": "com.a33n.exponotifications",
+  "googleServicesFile": "./google-services.json"
+}
+```
+
+Steps:
+
+1. Open the [Firebase Console](https://console.firebase.google.com/) and create a project (or select an existing one).
+2. Click **Add app** → **Android**.
+3. Enter the Android package name **`com.a33n.exponotifications`** — it must match `app.json` exactly.
+4. Finish the wizard and download **`google-services.json`**.
+5. Place the file in the project root (same folder as `app.json`).
+
+This file is gitignored in this repo. Add it locally on each machine that builds Android.
+
+> `google-services.json` contains public Firebase identifiers. Some teams commit it; this project keeps it local via `.gitignore`.
+
+### Android — get the Firebase service account key (FCM V1)
+
+Expo Push Service uses FCM V1 on Android. You need a **service account private key** uploaded to EAS — separate from `google-services.json`.
+
+Steps:
+
+1. In Firebase Console, open **Project settings** → **Service accounts**.
+2. Click **Generate new private key** → **Generate key**.
+3. Save the downloaded JSON file locally (for example `expo-notifications-service-account.json`).
+4. **Do not commit this file** — it contains a private key. Add it to `.gitignore`.
+5. Upload the key to EAS using one of these options:
+
+**Option A — EAS CLI**
+
+```bash
+eas credentials
+```
+
+Then follow the prompts:
+
+- **Android** → **production** (or your build profile) → **Google Service Account**
+- **Manage your Google Service Account Key for Push Notifications (FCM V1)**
+- **Set up a Google Service Account Key for Push Notifications (FCM V1)** → **Upload a new service account key**
+
+If the JSON file is in your project directory, EAS CLI detects it and asks you to confirm.
+
+**Option B — Expo dashboard**
+
+1. Open your project on [expo.dev](https://expo.dev).
+2. Go to **Project settings** → **Credentials** → **Android**.
+3. Select your application identifier (`com.a33n.exponotifications`).
+4. Under **Service Credentials** → **FCM V1 service account key**, upload the JSON file.
+
+See the [FCM credentials guide](https://docs.expo.dev/push-notifications/fcm-credentials/) for details.
+
+### iOS — automatic setup with EAS Build
+
+iOS push notifications require a paid Apple Developer account. EAS can create and store the required Apple credentials for you during your first development build — no manual APNs key setup in the Apple Developer portal.
+
+Before building:
+
+1. Register the physical iPhone you want to test on:
+
+   ```bash
+   eas device:create
+   ```
+
+   Scan the QR code on your device to add its UDID to your Apple Developer account.
+
+2. Run the development build:
+
+   ```bash
+   eas build --profile development --platform ios
+   ```
+
+   On the first build, EAS CLI walks you through setup interactively. Answer **Yes** when asked about:
+
+   - Logging in to your **Apple Developer account**
+   - **Setting up push notifications** for the project
+   - **Generating a new Apple Push Notifications service key** (APNs)
+
+   EAS also handles related iOS signing assets for a development build, such as:
+
+   - Distribution certificate
+   - Ad hoc provisioning profile (includes your registered test devices)
+   - Push notification entitlement on the app identifier
+
+3. When the build finishes, install it on your registered device from the link EAS provides (or via the Expo dashboard).
+
+You only need to go through the full credential flow once. Later builds reuse the credentials stored on EAS.
+
+If you skipped push setup initially, run `eas credentials`, select **iOS**, and configure push notifications manually.
+
+See [Expo push notifications setup](https://docs.expo.dev/push-notifications/push-notifications-setup/#get-credentials-for-development-builds) for the official walkthrough.
 
 ## Get started
 
@@ -60,13 +166,24 @@ For Android push delivery, add a `google-services.json` file from Firebase to th
    npx expo start
    ```
 
-3. Run on a device using a development build:
+3. Complete [Configure push credentials](#configure-push-credentials) above, then create a development build:
 
    ```bash
-   npm run build:ios:dev   # build iOS dev client via EAS
+   eas build --profile development --platform ios
+   eas build --profile development --platform android
    ```
 
-   Or open the app in an existing dev client / simulator from the Expo CLI menu.
+   Or use the npm shortcut for iOS:
+
+   ```bash
+   npm run build:ios:dev
+   ```
+
+4. After installing the dev build, start the dev server and open the app on your device:
+
+   ```bash
+   npx expo start --dev-client
+   ```
 
 ## How it works
 
