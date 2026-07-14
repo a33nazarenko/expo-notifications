@@ -1,56 +1,119 @@
-# Welcome to your Expo app 👋
+# expo-notifications
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A reference implementation of push notifications in an Expo app using [`expo-notifications`](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/) (SDK 57).
+
+The app registers for push permissions, retrieves Expo and device push tokens, handles incoming notifications while the app is open, and displays the latest notification payload on screen.
+
+## What this project demonstrates
+
+- Requesting notification permissions on iOS and Android
+- Creating a default Android notification channel
+- Fetching an **Expo push token** via `getExpoPushTokenAsync` (used with [Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/))
+- Fetching a **native device push token** via `getDevicePushTokenAsync` (FCM on Android, APNs on iOS)
+- Configuring foreground notification behavior with `setNotificationHandler`
+- Listening for notifications received in the foreground and user tap responses
+- Sharing notification state across the app with React Context
+
+## Tech stack
+
+- [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/)
+- [Expo Router](https://docs.expo.dev/router/introduction/) (file-based routing)
+- [expo-dev-client](https://docs.expo.dev/develop/development-builds/introduction/) for development builds
+- [EAS Build](https://docs.expo.dev/build/introduction/) for native builds
+
+## Project structure
+
+```
+src/
+├── app/
+│   ├── _layout.tsx          # Notification handler + NotificationProvider
+│   └── index.tsx            # Displays push token and latest notification
+├── context/
+│   └── NotificationContext.tsx  # Token registration and notification listeners
+└── utils/
+    └── registerForPushNotificationAsync.ts  # Permission + token logic
+```
+
+## Prerequisites
+
+Push notifications require a **development build** or **production build**. They do not work in Expo Go.
+
+Supported environments:
+
+- Physical iOS and Android devices
+- Android emulator with Google Play services
+- iOS Simulator (Xcode 14+, macOS 13+, iOS 16+)
+
+For Android push delivery, add a `google-services.json` file from Firebase to the project root (referenced in `app.json`). This file is gitignored and must be added locally.
 
 ## Get started
 
-1. Install dependencies
+1. Install dependencies:
 
    ```bash
    npm install
    ```
 
-2. Start the app
+2. Start the development server:
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+3. Run on a device using a development build:
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npm run build:ios:dev   # build iOS dev client via EAS
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   Or open the app in an existing dev client / simulator from the Expo CLI menu.
 
-## Get a fresh project
+## How it works
 
-When you're ready, run:
+1. **`_layout.tsx`** sets the foreground notification handler (sound, badge, banner) and wraps the app in `NotificationProvider`.
+2. **`registerForPushNotificationAsync.ts`** requests permissions, sets up the Android channel, and retrieves the Expo push token using the EAS project ID from `app.json`.
+3. **`NotificationContext.tsx`** registers for push on mount, stores tokens and the latest notification, and subscribes to:
+   - `addNotificationReceivedListener` — notification arrives while app is open
+   - `addNotificationResponseReceivedListener` — user taps a notification
+4. **`index.tsx`** reads from context and displays the Expo push token plus the title, body, and data of the most recent notification.
+
+## Test push notifications
+
+1. Launch the app on a device and copy the **Expo push token** shown on the home screen.
+2. Send a test notification with the [Expo Push Notifications Tool](https://expo.dev/notifications) or your backend using the [Expo Push API](https://docs.expo.dev/push-notifications/sending-notifications/).
+
+Example curl request:
 
 ```bash
-npm run reset-project
+curl -H "Content-Type: application/json" \
+  -X POST https://exp.host/--/api/v2/push/send \
+  -d '{
+    "to": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+    "title": "Hello",
+    "body": "This is a test notification",
+    "data": { "foo": "bar" }
+  }'
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+Replace the `to` value with your Expo push token.
 
-### Other setup steps
+## EAS build profiles
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Build profiles are defined in `eas.json`:
+
+| Profile       | Use case                          |
+|---------------|-----------------------------------|
+| `development` | Dev client with hot reload        |
+| `preview`     | Internal distribution             |
+| `production`  | App Store / Play Store release    |
+
+```bash
+eas build --profile development --platform ios
+eas build --profile development --platform android
+```
 
 ## Learn more
 
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [Expo Notifications SDK reference](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/)
+- [Push notifications setup guide](https://docs.expo.dev/push-notifications/push-notifications-setup/)
+- [Send notifications with Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/)
