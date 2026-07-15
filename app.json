@@ -12,7 +12,8 @@
       "bundleIdentifier": "com.a33n.exponotifications",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "appleTeamId": "" // add your apple team id here
     },
     "android": {
       "adaptiveIcon": {
@@ -38,7 +39,8 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
-      ]
+      ],
+      "@bacons/apple-targets"
     ],
     "experiments": {
       "typedRoutes": true,
