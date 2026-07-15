@@ -2,7 +2,7 @@
 
 A reference implementation of push notifications in an Expo app using [`expo-notifications`](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/) (SDK 57).
 
-The app registers for push permissions, retrieves Expo and device push tokens, handles incoming notifications while the app is open, and displays the latest notification payload on screen.
+The app registers for push permissions, retrieves Expo and device push tokens, handles incoming notifications while the app is open, and displays the latest notification payload on screen. On iOS, a **Notification Service Extension** (via [`@bacons/apple-targets`](https://github.com/EvanBacon/expo-apple-targets)) downloads and attaches images for rich push notifications before they are displayed.
 
 ## What this project demonstrates
 
@@ -13,12 +13,14 @@ The app registers for push permissions, retrieves Expo and device push tokens, h
 - Configuring foreground notification behavior with `setNotificationHandler`
 - Listening for notifications received in the foreground and user tap responses
 - Sharing notification state across the app with React Context
+- **Rich content on iOS** — a Notification Service Extension downloads notification images before display (Android shows images out of the box via FCM)
 
 ## Tech stack
 
 - [Expo SDK 57](https://docs.expo.dev/versions/v57.0.0/)
 - [Expo Router](https://docs.expo.dev/router/introduction/) (file-based routing)
 - [expo-dev-client](https://docs.expo.dev/develop/development-builds/introduction/) for development builds
+- [@bacons/apple-targets](https://github.com/EvanBacon/expo-apple-targets) for the iOS Notification Service Extension
 - [EAS Build](https://docs.expo.dev/build/introduction/) for native builds
 
 ## Project structure
@@ -32,6 +34,13 @@ src/
 │   └── NotificationContext.tsx  # Token registration and notification listeners
 └── utils/
     └── registerForPushNotificationAsync.ts  # Permission + token logic
+
+targets/
+└── notification-service/      # iOS Notification Service Extension (rich content)
+    ├── expo-target.config.js  # Target type and entitlements
+    ├── NotificationService.swift  # Downloads and attaches notification images
+    ├── Info.plist
+    └── generated.entitlements
 ```
 
 ## Prerequisites
@@ -133,13 +142,11 @@ Before building:
    ```
 
    On the first build, EAS CLI walks you through setup interactively. Answer **Yes** when asked about:
-
    - Logging in to your **Apple Developer account**
    - **Setting up push notifications** for the project
    - **Generating a new Apple Push Notifications service key** (APNs)
 
    EAS also handles related iOS signing assets for a development build, such as:
-
    - Distribution certificate
    - Ad hoc provisioning profile (includes your registered test devices)
    - Push notification entitlement on the app identifier
@@ -194,6 +201,63 @@ See [Expo push notifications setup](https://docs.expo.dev/push-notifications/pus
    - `addNotificationResponseReceivedListener` — user taps a notification
 4. **`index.tsx`** reads from context and displays the Expo push token plus the title, body, and data of the most recent notification.
 
+## Rich content notifications (iOS)
+
+Android displays notification images automatically via FCM. iOS requires a **Notification Service Extension** to download and attach images before the notification is shown.
+
+This project uses [`@bacons/apple-targets`](https://github.com/EvanBacon/expo-apple-targets) to add that extension without ejecting from the managed workflow.
+
+### Setup
+
+1. The `@bacons/apple-targets` plugin is registered in `app.json`:
+
+   ```json
+   "plugins": [
+     "expo-router",
+     "@bacons/apple-targets"
+   ]
+   ```
+
+2. The extension lives in `targets/notification-service/`. It was scaffolded with:
+
+   ```bash
+   npx create-target notification-service
+   ```
+
+3. `NotificationService.swift` implements the image download logic. When a push payload includes rich content, the extension fetches the image URL and attaches it to the notification before delivery.
+
+### Rebuild after target changes
+
+After adding or changing targets, `expo-target.config.js`, or the plugin in `app.json`, create a new iOS build:
+
+```bash
+eas build --profile development --platform ios
+```
+
+Swift-only changes in `targets/notification-service/` are picked up on the next build without a `prebuild --clean`. Configuration changes require a fresh prebuild (handled automatically by EAS Build).
+
+### Send a rich notification
+
+Use the Expo Push API [`richContent`](https://docs.expo.dev/push-notifications/sending-notifications/) field with `mutableContent: true` on iOS:
+
+```bash
+curl -H "Content-Type: application/json" \
+  -X POST https://exp.host/--/api/v2/push/send \
+  -d '{
+    "to": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+    "title": "Hello",
+    "body": "Check out this image",
+    "mutableContent": true,
+    "richContent": {
+      "image": "https://picsum.photos/400/300"
+    }
+  }'
+```
+
+Replace the `to` value with your Expo push token. The image must be a publicly accessible HTTPS URL.
+
+See the [Expo notification service extension example](https://github.com/expo/expo/pull/36202) for the reference implementation this project follows.
+
 ## Test push notifications
 
 1. Launch the app on a device and copy the **Expo push token** shown on the home screen.
@@ -214,15 +278,17 @@ curl -H "Content-Type: application/json" \
 
 Replace the `to` value with your Expo push token.
 
+For image attachments on iOS, see [Rich content notifications (iOS)](#rich-content-notifications-ios) above.
+
 ## EAS build profiles
 
 Build profiles are defined in `eas.json`:
 
-| Profile       | Use case                          |
-|---------------|-----------------------------------|
-| `development` | Dev client with hot reload        |
-| `preview`     | Internal distribution             |
-| `production`  | App Store / Play Store release    |
+| Profile       | Use case                       |
+| ------------- | ------------------------------ |
+| `development` | Dev client with hot reload     |
+| `preview`     | Internal distribution          |
+| `production`  | App Store / Play Store release |
 
 ```bash
 eas build --profile development --platform ios
@@ -234,3 +300,4 @@ eas build --profile development --platform android
 - [Expo Notifications SDK reference](https://docs.expo.dev/versions/v57.0.0/sdk/notifications/)
 - [Push notifications setup guide](https://docs.expo.dev/push-notifications/push-notifications-setup/)
 - [Send notifications with Expo Push Service](https://docs.expo.dev/push-notifications/sending-notifications/)
+- [@bacons/apple-targets](https://github.com/EvanBacon/expo-apple-targets) — config plugin for iOS app extensions
